@@ -1,34 +1,177 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" data-theme="cosmos">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>EpicyclesLab — Atelier Épicycles & Séries de Fourier</title>
+    
+    <!-- Meta-tags PWA & Ergonomie Mobile-First -->
+    <meta name="description" content="Atelier interactif PWA d'épicycles et de décomposition par séries de Fourier complexes en temps réel à 60 fps." />
+    <meta name="theme-color" content="#070b19" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="EpicyclesLab" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="format-detection" content="telephone=no" />
+    
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>
     <div id="app">
       <!-- Zone Graphique Principale Canvas -->
-      <main class="canvas-viewport">
-        <canvas id="epicycle-canvas"></canvas>
+      <main class="canvas-viewport" role="main" aria-label="Espace de visualisation des épicycles">
+        <!-- Barre supérieure flottante : Thèmes, Raccourcis, Contrôles vue -->
+        <header class="top-nav-bar" role="banner" aria-label="Barre d'outils supérieure">
+          <div class="brand">
+            <span class="brand-icon">🌀</span>
+            <div class="brand-text">
+              <span class="brand-title">EpicyclesLab</span>
+              <span class="brand-sub">Fourier 60 fps</span>
+            </div>
+          </div>
+
+          <div class="top-actions">
+            <!-- Sélecteur de Thème Visuel en 1 clic -->
+            <div class="theme-switcher" role="group" aria-label="Thèmes graphiques">
+              <button class="btn-theme active" data-theme-id="cosmos" title="Cosmos Neon (Style Transcendental Space / 3Blue1Brown)" aria-pressed="true">
+                🌌 Cosmos
+              </button>
+              <button class="btn-theme" data-theme-id="blueprint" title="Blueprint Mathématique (Sombre & Grille polaire)" aria-pressed="false">
+                📐 Blueprint
+              </button>
+              <button class="btn-theme" data-theme-id="paper" title="Papier & Encre (Mode Clair académique)" aria-pressed="false">
+                📜 Papier
+              </button>
+            </div>
+
+            <!-- Bouton aide raccourcis clavier Desktop -->
+            <button id="btn-shortcuts-modal" class="btn btn-icon btn-glass" title="Raccourcis Clavier (Touches Espace, R, F, 1-8)" aria-label="Afficher les raccourcis clavier">
+              ⌨️
+            </button>
+
+            <!-- Bouton plein écran -->
+            <button id="btn-fullscreen" class="btn btn-icon btn-glass" title="Plein écran (F11)" aria-label="Basculer le plein écran">
+              ⛶
+            </button>
+
+            <!-- Bouton toggle drawer mobile -->
+            <button id="btn-toggle-drawer" class="btn btn-primary btn-drawer-toggle" aria-label="Ouvrir le panneau de configuration">
+              ⚙️ Réglages
+            </button>
+          </div>
+        </header>
+
+        <canvas id="epicycle-canvas" aria-label="Canvas de simulation des épicycles"></canvas>
         <div id="transport-bar-slot"></div>
+
+        <!-- Raccourcis Flottants Rapides Vue -->
+        <div class="floating-view-controls" role="toolbar" aria-label="Contrôles caméra">
+          <button id="btn-view-follow" class="btn btn-glass btn-sm" title="Suivre la pointe traçante (Touche F)">
+            📍 Suivre pointe
+          </button>
+          <button id="btn-view-reset" class="btn btn-glass btn-sm" title="Recentrer la caméra (Touche R)">
+            🎯 Recentrer
+          </button>
+          <button id="btn-view-axes" class="btn btn-glass btn-sm active" title="Afficher/Masquer le repère Re/Im">
+            ➕ Repère Re/Im
+          </button>
+        </div>
       </main>
 
-      <!-- Panneau Latéral (Atelier & Dessin Inverse) -->
-      <aside class="sidebar" id="sidebar-container">
+      <!-- Overlay d'obscurcissement pour mobile drawer -->
+      <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
+
+      <!-- Panneau Latéral / Studio Drawer (Atelier & Dessin Inverse) -->
+      <aside class="sidebar" id="sidebar-container" role="complementary" aria-label="Panneau de réglages">
+        <!-- Barre de saisie / Fermeture mobile -->
+        <div class="mobile-drawer-header">
+          <div class="drawer-drag-handle" aria-hidden="true"></div>
+          <div class="drawer-title-row">
+            <span class="drawer-title">Studio Fourier</span>
+            <button id="btn-close-drawer" class="btn btn-icon btn-ghost" aria-label="Fermer le tiroir de réglages">✕</button>
+          </div>
+        </div>
+
         <!-- Onglets de bascule de Mode -->
-        <nav class="mode-tabs">
-          <button id="tab-workshop" class="tab-btn" data-target="workshop-container">
-            🌀 Mode Atelier
-          </button>
-          <button id="tab-inverse" class="tab-btn active" data-target="inverse-container">
+        <nav class="mode-tabs" role="tablist" aria-label="Modes de fonctionnement">
+          <button id="tab-inverse" class="tab-btn active" data-target="inverse-container" role="tab" aria-selected="true" aria-controls="inverse-container">
             ✏️ Dessin Inverse (DFT/FFT)
+          </button>
+          <button id="tab-workshop" class="tab-btn" data-target="workshop-container" role="tab" aria-selected="false" aria-controls="workshop-container">
+            🌀 Mode Atelier (Synthèse)
           </button>
         </nav>
 
-        <div id="workshop-container" class="tab-pane" style="display: none;"></div>
-        <div id="inverse-container" class="tab-pane"></div>
+        <div id="inverse-container" class="tab-pane" role="tabpanel" aria-labelledby="tab-inverse"></div>
+        <div id="workshop-container" class="tab-pane" style="display: none;" role="tabpanel" aria-labelledby="tab-workshop"></div>
       </aside>
+
+      <!-- Barre de navigation mobile inférieure ergonomique au pouce -->
+      <nav class="mobile-bottom-bar" role="navigation" aria-label="Barre d'outils mobile">
+        <button id="mob-btn-play" class="mob-tab-item active" aria-label="Lecture ou Pause">
+          <span class="mob-icon">⏯️</span>
+          <span class="mob-label">Lecture</span>
+        </button>
+        <button id="mob-btn-preset-pi" class="mob-tab-item" aria-label="Modèle Pi de référence">
+          <span class="mob-icon">π</span>
+          <span class="mob-label">Modèle π</span>
+        </button>
+        <button id="mob-btn-switch-mode" class="mob-tab-item" aria-label="Basculer Atelier / Dessin">
+          <span class="mob-icon">🔄</span>
+          <span class="mob-label" id="mob-label-mode">Mode Atelier</span>
+        </button>
+        <button id="mob-btn-open-settings" class="mob-tab-item" aria-label="Ouvrir le tiroir de réglages">
+          <span class="mob-icon">⚙️</span>
+          <span class="mob-label">Réglages</span>
+        </button>
+      </nav>
+
+      <!-- Modal d'Aide Raccourcis Clavier Desktop -->
+      <dialog id="shortcuts-dialog" class="shortcuts-dialog" aria-labelledby="dialog-title">
+        <div class="shortcuts-card">
+          <div class="shortcuts-header">
+            <h3 id="dialog-title">⌨️ Raccourcis Clavier EpicyclesLab</h3>
+            <button id="btn-close-shortcuts" class="btn btn-icon btn-ghost" aria-label="Fermer la boîte de dialogue">✕</button>
+          </div>
+          <div class="shortcuts-body">
+            <div class="shortcut-row">
+              <span class="shortcut-desc">Lecture / Pause de l'animation</span>
+              <kbd>Espace</kbd>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-desc">Recentrer la vue & réinitialiser zoom</span>
+              <kbd>R</kbd>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-desc">Suivre la pointe traçante (Lock Target)</span>
+              <kbd>F</kbd>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-desc">Afficher / Masquer repère complexe Re/Im</span>
+              <kbd>A</kbd>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-desc">Effacer la trace lumineuse</span>
+              <kbd>C</kbd>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-desc">Presets de courbes (π, Cœur, Étoile, Papillon...)</span>
+              <kbd>1</kbd> – <kbd>8</kbd>
+            </div>
+            <div class="shortcut-row">
+              <span class="shortcut-desc">Zoom / Déplacement (Pan)</span>
+              <span class="shortcut-tip">Molette souris / Glisser clic ou tactile</span>
+            </div>
+          </div>
+          <div class="shortcuts-footer">
+            <button id="btn-shortcuts-ok" class="btn btn-primary">Compris !</button>
+          </div>
+        </div>
+      </dialog>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

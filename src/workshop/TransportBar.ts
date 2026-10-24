@@ -7,6 +7,7 @@ export class TransportBar {
   private timeLabel: HTMLElement | null = null;
   private btnPlay: HTMLButtonElement | null = null;
   private isUserScrubbing: boolean = false;
+  private isRunning: boolean = true;
 
   constructor(container: HTMLElement, renderer: EpicycleRenderer) {
     this.container = container;
@@ -17,15 +18,15 @@ export class TransportBar {
 
   private init(): void {
     this.container.innerHTML = `
-      <div class="transport-bar">
+      <div class="transport-bar" role="region" aria-label="Contrôles de transport temporel">
         <div class="transport-controls">
-          <button id="btn-play" class="btn btn-primary transport-btn" title="Lecture / Pause (Espace)">
+          <button id="btn-play" class="btn btn-primary transport-btn" title="Lecture / Pause (Espace)" aria-label="Lecture ou Pause de l'animation">
             ${this.renderer.isPlaying ? '⏸ Pause' : '▶ Lecture'}
           </button>
           
           <div class="speed-selector">
-            <span class="transport-label">Vitesse :</span>
-            <select id="sel-speed" class="select-sm">
+            <label for="sel-speed" class="transport-label">Vitesse :</label>
+            <select id="sel-speed" class="select-sm" aria-label="Vitesse d'animation">
               <option value="0.1">0.1x</option>
               <option value="0.25">0.25x</option>
               <option value="0.5">0.5x</option>
@@ -37,8 +38,8 @@ export class TransportBar {
           </div>
 
           <div class="fade-selector">
-            <span class="transport-label">Traînée :</span>
-            <select id="sel-fade" class="select-sm">
+            <label for="sel-fade" class="transport-label">Traînée :</label>
+            <select id="sel-fade" class="select-sm" aria-label="Persistance de la traînée">
               <option value="0.25">25% tour</option>
               <option value="0.5">50% tour</option>
               <option value="1.0" selected>1 tour (100%)</option>
@@ -46,15 +47,15 @@ export class TransportBar {
             </select>
           </div>
 
-          <button id="btn-clear-trail" class="btn btn-secondary transport-btn" title="Effacer la traînée">
+          <button id="btn-clear-trail" class="btn btn-secondary transport-btn" title="Effacer la traînée" aria-label="Effacer la trace">
             🧹 Effacer trace
           </button>
         </div>
 
         <div class="scrubber-container">
-          <span class="transport-label">t :</span>
-          <input type="range" id="time-scrubber" min="0" max="6.2831853" step="0.005" value="0" />
-          <span id="time-val" class="time-display">0.00 / 2π</span>
+          <label for="time-scrubber" class="transport-label">t :</label>
+          <input type="range" id="time-scrubber" min="0" max="6.2831853" step="0.005" value="0" aria-label="Progression temporelle" />
+          <span id="time-val" class="time-display" aria-live="polite">0.00 / 2π</span>
         </div>
       </div>
     `;
@@ -67,13 +68,17 @@ export class TransportBar {
     this.startScrubberSync();
   }
 
+  public updatePlayState(isPlaying: boolean): void {
+    if (this.btnPlay) {
+      this.btnPlay.textContent = isPlaying ? '⏸ Pause' : '▶ Lecture';
+    }
+  }
+
   private bindEvents(): void {
     // Lecture / Pause
     this.btnPlay?.addEventListener('click', () => {
       this.renderer.isPlaying = !this.renderer.isPlaying;
-      if (this.btnPlay) {
-        this.btnPlay.textContent = this.renderer.isPlaying ? '⏸ Pause' : '▶ Lecture';
-      }
+      this.updatePlayState(this.renderer.isPlaying);
     });
 
     // Raccourci barre d'espace
@@ -81,9 +86,7 @@ export class TransportBar {
       if (e.code === 'Space' && (e.target as HTMLElement).tagName !== 'INPUT') {
         e.preventDefault();
         this.renderer.isPlaying = !this.renderer.isPlaying;
-        if (this.btnPlay) {
-          this.btnPlay.textContent = this.renderer.isPlaying ? '⏸ Pause' : '▶ Lecture';
-        }
+        this.updatePlayState(this.renderer.isPlaying);
       }
     });
 
@@ -128,6 +131,7 @@ export class TransportBar {
 
   private startScrubberSync(): void {
     const sync = () => {
+      if (!this.isRunning) return;
       if (!this.isUserScrubbing && this.timeScrubber && this.timeLabel) {
         this.timeScrubber.value = this.renderer.time.toString();
         this.updateTimeDisplay(this.renderer.time);
@@ -135,5 +139,9 @@ export class TransportBar {
       requestAnimationFrame(sync);
     };
     requestAnimationFrame(sync);
+  }
+
+  public destroy(): void {
+    this.isRunning = false;
   }
 }

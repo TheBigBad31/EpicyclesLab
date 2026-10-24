@@ -1,0 +1,19 @@
+{
+  "name": "EpicyclesLab — Atelier Épicycles & Séries de Fourier",
+  "short_name": "EpicyclesLab",
+  "description": "Atelier interactif de manipulation d'épicycles et décomposition de Fourier complexe en temps réel à 60 fps.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070b19",
+  "theme_color": "#070b19",
+  "orientation": "any",
+  "categories": ["education", "math", "graphics", "utilities"],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "192x192 512x512 any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

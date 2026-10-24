@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#0c1633" />
+      <stop offset="100%" stop-color="#070b19" />
+    </radialGradient>
+    <linearGradient id="neonTrail" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8" />
+      <stop offset="50%" stop-color="#818cf8" />
+      <stop offset="100%" stop-color="#f43f5e" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="112" fill="url(#bgGlow)" />
+  <rect width="512" height="512" rx="112" fill="none" stroke="rgba(56, 189, 248, 0.3)" stroke-width="4" />
+
+  <!-- Repère Cartésien discret -->
+  <line x1="256" y1="48" x2="256" y2="464" stroke="rgba(255, 255, 255, 0.08)" stroke-width="2" stroke-dasharray="6,6" />
+  <line x1="48" y1="256" x2="464" y2="256" stroke="rgba(255, 255, 255, 0.08)" stroke-width="2" stroke-dasharray="6,6" />
+
+  <!-- Premier Épicycle (Grand) -->
+  <circle cx="256" cy="256" r="140" fill="none" stroke="rgba(56, 189, 248, 0.25)" stroke-width="3" />
+  <!-- Rayon vecteur 1 -->
+  <line x1="256" y1="256" x2="355" y2="157" stroke="#fbbf24" stroke-width="4" stroke-linecap="round" />
+  <circle cx="256" cy="256" r="6" fill="#38bdf8" />
+
+  <!-- Deuxième Épicycle (Moyen) -->
+  <circle cx="355" cy="157" r="75" fill="none" stroke="rgba(129, 140, 248, 0.35)" stroke-width="2.5" />
+  <!-- Rayon vecteur 2 -->
+  <line x1="355" y1="157" x2="408" y2="210" stroke="#fbbf24" stroke-width="3.5" stroke-linecap="round" />
+  <circle cx="355" cy="157" r="5" fill="#818cf8" />
+
+  <!-- Troisième Épicycle (Petit) -->
+  <circle cx="408" cy="210" r="40" fill="none" stroke="rgba(244, 63, 94, 0.4)" stroke-width="2" />
+  <!-- Rayon vecteur 3 -->
+  <line x1="408" y1="210" x2="385" y2="242" stroke="#fbbf24" stroke-width="3" stroke-linecap="round" />
+  <circle cx="408" cy="210" r="4" fill="#f43f5e" />
+
+  <!-- Courbe / Traînée de Fourier stylisée en forme d'onde / Pi -->
+  <path d="M 120 280 C 140 200, 220 180, 256 220 C 290 260, 340 320, 385 242" 
+        fill="none" 
+        stroke="url(#neonTrail)" 
+        stroke-width="5" 
+        stroke-linecap="round" 
+        filter="url(#glow)" />
+
+  <!-- Pointe Traçante Brillante (Tip) -->
+  <circle cx="385" cy="242" r="14" fill="rgba(56, 189, 248, 0.35)" />
+  <circle cx="385" cy="242" r="7" fill="#ffffff" filter="url(#glow)" />
+</svg>

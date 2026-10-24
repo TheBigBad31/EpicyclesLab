@@ -2,6 +2,7 @@ import { EpicycleTerm, Point2D, evaluateEpicycles } from '../math';
 import { Camera } from './Camera';
 import { TrailBuffer, TrailOptions } from './TrailBuffer';
 import { FpsCounter } from './FpsCounter';
+import { EpicycleThemeId, THEMES, ThemeColors } from './themes';
 
 export interface EpicycleRendererOptions {
   canvas: HTMLCanvasElement;
@@ -12,9 +13,10 @@ export interface EpicycleRendererOptions {
   showVectors?: boolean;
   showTrail?: boolean;
   showStats?: boolean;
+  showAxes?: boolean;
   showTargetCurve?: boolean;
   targetCurvePoints?: Point2D[];
-  theme?: 'dark' | 'light';
+  theme?: EpicycleThemeId | 'dark' | 'light';
 }
 
 export class EpicycleRenderer {
@@ -31,9 +33,10 @@ export class EpicycleRenderer {
   public showVectors: boolean = true;
   public showTrail: boolean = true;
   public showStats: boolean = true;
+  public showAxes: boolean = true;
   public showTargetCurve: boolean = false;
   public targetCurvePoints: Point2D[] = [];
-  public theme: 'dark' | 'light' = 'dark';
+  public theme: EpicycleThemeId = 'cosmos';
 
   // Animation & transport temporel
   public isPlaying: boolean = true;
@@ -52,7 +55,6 @@ export class EpicycleRenderer {
   private dragStartY: number = 0;
   private activePointers = new Map<number, { x: number; y: number }>();
   private initialPinchDist: number | null = null;
-  private initialPinchZoom: number = 1;
 
   // Derniers centres calculés pour l'inspection
   public lastCenters: Point2D[] = [];
@@ -67,8 +69,19 @@ export class EpicycleRenderer {
     this.ctx = ctx;
 
     this.camera = new Camera();
-    this.trail = new TrailBuffer(options.trailOptions);
     this.fpsCounter = new FpsCounter();
+
+    if (options.theme) {
+      this.setTheme(options.theme);
+    } else {
+      this.setTheme('cosmos');
+    }
+
+    this.trail = new TrailBuffer({
+      ...options.trailOptions,
+      color: THEMES[this.theme].trailColor,
+      glowColor: THEMES[this.theme].trailGlowColor,
+    });
 
     if (options.terms) this.terms = options.terms;
     if (options.maxCircles !== undefined) this.maxCircles = options.maxCircles;
@@ -76,12 +89,30 @@ export class EpicycleRenderer {
     if (options.showVectors !== undefined) this.showVectors = options.showVectors;
     if (options.showTrail !== undefined) this.showTrail = options.showTrail;
     if (options.showStats !== undefined) this.showStats = options.showStats;
+    if (options.showAxes !== undefined) this.showAxes = options.showAxes;
     if (options.showTargetCurve !== undefined) this.showTargetCurve = options.showTargetCurve;
     if (options.targetCurvePoints) this.targetCurvePoints = options.targetCurvePoints;
-    if (options.theme) this.theme = options.theme;
 
     this.setupDprAndResize();
     this.setupInteractions();
+  }
+
+  public setTheme(themeId: EpicycleThemeId | 'dark' | 'light'): void {
+    let resolved: EpicycleThemeId = 'cosmos';
+    if (themeId === 'dark') resolved = 'cosmos';
+    else if (themeId === 'light') resolved = 'paper';
+    else if (THEMES[themeId]) resolved = themeId;
+
+    this.theme = resolved;
+    const currentTheme = THEMES[this.theme];
+    if (this.trail) {
+      this.trail.color = currentTheme.trailColor;
+      this.trail.glowColor = currentTheme.trailGlowColor;
+    }
+  }
+
+  public getThemeConfig(): ThemeColors {
+    return THEMES[this.theme] || THEMES.cosmos;
   }
 
   private setupDprAndResize(): void {
@@ -110,19 +141,28 @@ export class EpicycleRenderer {
   private setupInteractions(): void {
     const canvas = this.canvas;
 
-    canvas.style.touchAction = 'none'; // Empêcher le scroll parasite du navigateur sur mobile
+    // Zoom molette souris fluide
+    canvas.addEventListener(
+      'wheel',
+      (e: WheelEvent) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const screenX = e.clientX - rect.left;
+        const screenY = e.clientY - rect.top;
 
-    canvas.addEventListener('wheel', (e: WheelEvent) => {
-      e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
-      const screenX = e.clientX - rect.left;
-      const screenY = e.clientY - rect.top;
+        const factor = Math.exp(-e.deltaY * 0.0015);
+        this.camera.zoomAtScreenPoint(
+          factor,
+          screenX,
+          screenY,
+          rect.width,
+          rect.height
+        );
+      },
+      { passive: false }
+    );
 
-      // Facteur de zoom fluide
-      const factor = e.deltaY < 0 ? 1.15 : 0.87;
-      this.camera.zoomAtScreenPoint(factor, screenX, screenY, rect.width, rect.height);
-    }, { passive: false });
-
+    // Pan & Pincement tactile multi-touch (Pointer Events)
     canvas.addEventListener('pointerdown', (e: PointerEvent) => {
       canvas.setPointerCapture(e.pointerId);
       this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
@@ -132,10 +172,12 @@ export class EpicycleRenderer {
         this.dragStartX = e.clientX;
         this.dragStartY = e.clientY;
       } else if (this.activePointers.size === 2) {
+        // Début du pincement à deux doigts
         this.isDragging = false;
         const pts = Array.from(this.activePointers.values());
-        this.initialPinchDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-        this.initialPinchZoom = this.camera.zoom;
+        const dx = pts[0].x - pts[1].x;
+        const dy = pts[0].y - pts[1].y;
+        this.initialPinchDist = Math.hypot(dx, dy);
       }
     });
 
@@ -143,29 +185,34 @@ export class EpicycleRenderer {
       if (!this.activePointers.has(e.pointerId)) return;
       this.activePointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
 
-      const rect = canvas.getBoundingClientRect();
-
       if (this.activePointers.size === 1 && this.isDragging) {
-        const dxScreen = e.clientX - this.dragStartX;
-        const dyScreen = e.clientY - this.dragStartY;
+        const dx = e.clientX - this.dragStartX;
+        const dy = e.clientY - this.dragStartY;
         this.dragStartX = e.clientX;
         this.dragStartY = e.clientY;
 
-        // Déplacement dans le monde
-        const dxWorld = -dxScreen / this.camera.zoom;
-        const dyWorld = -dyScreen / this.camera.zoom;
-        this.camera.panBy(dxWorld, dyWorld);
+        // Déplacement monde proportionnel au zoom inverse
+        this.camera.panBy(dx / this.camera.zoom, dy / this.camera.zoom);
       } else if (this.activePointers.size === 2 && this.initialPinchDist !== null) {
+        // Pincement tactile (Pinch-to-zoom)
         const pts = Array.from(this.activePointers.values());
-        const currentDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-        if (currentDist > 0) {
-          const factor = currentDist / this.initialPinchDist;
-          const centerScreenX = (pts[0].x + pts[1].x) / 2 - rect.left;
-          const centerScreenY = (pts[0].y + pts[1].y) / 2 - rect.top;
+        const dx = pts[0].x - pts[1].x;
+        const dy = pts[0].y - pts[1].y;
+        const dist = Math.hypot(dx, dy);
 
-          const targetZoom = this.initialPinchZoom * factor;
-          const zoomRatio = targetZoom / this.camera.zoom;
-          this.camera.zoomAtScreenPoint(zoomRatio, centerScreenX, centerScreenY, rect.width, rect.height);
+        if (this.initialPinchDist > 0) {
+          const rect = canvas.getBoundingClientRect();
+          const centerX = (pts[0].x + pts[1].x) / 2 - rect.left;
+          const centerY = (pts[0].y + pts[1].y) / 2 - rect.top;
+          const factor = dist / this.initialPinchDist;
+          this.initialPinchDist = dist; // Glissement continu fluide
+          this.camera.zoomAtScreenPoint(
+            factor,
+            centerX,
+            centerY,
+            rect.width,
+            rect.height
+          );
         }
       }
     });
@@ -268,13 +315,14 @@ export class EpicycleRenderer {
     const height = this.canvas.height;
     const logicalWidth = width / this.dpr;
     const logicalHeight = height / this.dpr;
+    const themeCfg = this.getThemeConfig();
 
     // Reset du canvas
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = this.theme === 'dark' ? '#0b0f19' : '#f8fafc';
+    ctx.fillStyle = themeCfg.bgMain;
     ctx.fillRect(0, 0, width, height);
 
-    // Grille de fond discrète
+    // Grille de fond discrète et repères cartésiens
     this.drawBackgroundGrid(logicalWidth, logicalHeight);
 
     // Application de la caméra avec support DPR
@@ -319,9 +367,10 @@ export class EpicycleRenderer {
   private drawTargetCurve(ctx: CanvasRenderingContext2D): void {
     const pts = this.targetCurvePoints;
     if (pts.length < 2) return;
+    const themeCfg = this.getThemeConfig();
 
     ctx.save();
-    ctx.strokeStyle = this.theme === 'dark' ? 'rgba(244, 63, 94, 0.45)' : 'rgba(225, 29, 72, 0.4)';
+    ctx.strokeStyle = themeCfg.targetCurveColor;
     ctx.lineWidth = Math.max(1, 2 / Math.sqrt(this.camera.zoom));
     ctx.setLineDash([4, 4]);
 
@@ -340,15 +389,16 @@ export class EpicycleRenderer {
     ctx.save();
     ctx.scale(this.dpr, this.dpr);
 
-    const isDark = this.theme === 'dark';
-    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.03)' : 'rgba(0, 0, 0, 0.04)';
-    ctx.lineWidth = 1;
-
-    const baseGridSize = 50;
+    const themeCfg = this.getThemeConfig();
+    const isBlueprint = this.theme === 'blueprint';
+    const baseGridSize = isBlueprint ? 40 : 50;
     const effectiveGridSize = baseGridSize * this.camera.zoom;
 
-    // Si la grille devient trop dense ou trop espacée, ajuster
+    // 1. Grille millimétrée / cartésienne
     if (effectiveGridSize > 15) {
+      ctx.strokeStyle = themeCfg.gridColor;
+      ctx.lineWidth = isBlueprint ? 0.8 : 1;
+
       const offsetX = ((logicalWidth / 2 - this.camera.x * this.camera.zoom) % effectiveGridSize + effectiveGridSize) % effectiveGridSize;
       const offsetY = ((logicalHeight / 2 - this.camera.y * this.camera.zoom) % effectiveGridSize + effectiveGridSize) % effectiveGridSize;
 
@@ -364,16 +414,48 @@ export class EpicycleRenderer {
       ctx.stroke();
     }
 
+    // 2. Axes du repère complexe (Re, Im)
+    if (this.showAxes) {
+      const originX = logicalWidth / 2 - this.camera.x * this.camera.zoom;
+      const originY = logicalHeight / 2 - this.camera.y * this.camera.zoom;
+
+      ctx.strokeStyle = themeCfg.axisColor;
+      ctx.lineWidth = isBlueprint ? 1.5 : 1.2;
+      ctx.setLineDash(isBlueprint ? [] : [4, 4]);
+
+      ctx.beginPath();
+      // Axe Réel (Re) horizontal
+      if (originY >= 0 && originY <= logicalHeight) {
+        ctx.moveTo(0, originY);
+        ctx.lineTo(logicalWidth, originY);
+      }
+      // Axe Imaginaire (Im) vertical
+      if (originX >= 0 && originX <= logicalWidth) {
+        ctx.moveTo(originX, 0);
+        ctx.lineTo(originX, logicalHeight);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // Étiquettes Re et Im
+      ctx.fillStyle = themeCfg.axisColor;
+      ctx.font = '10px ui-monospace, monospace';
+      if (originY >= 20 && originY <= logicalHeight - 10) {
+        ctx.fillText('Re(z)', logicalWidth - 42, originY - 6);
+      }
+      if (originX >= 10 && originX <= logicalWidth - 40) {
+        ctx.fillText('Im(z)', originX + 6, 20);
+      }
+    }
+
     ctx.restore();
   }
 
   private drawEpicycles(ctx: CanvasRenderingContext2D, centers: Point2D[], activeCount: number): void {
-    const isDark = this.theme === 'dark';
+    const themeCfg = this.getThemeConfig();
     const zoom = this.camera.zoom;
     const baseLineWidth = Math.max(0.6, 1.2 / Math.sqrt(zoom));
 
-    // Optimisation de rendu pour 200+ cercles :
-    // Batch des cercles simples en un seul path si possible, ou dégradé de couleur
     for (let i = 0; i < activeCount; i++) {
       const prevCenter = centers[i];
       const nextCenter = centers[i + 1];
@@ -383,9 +465,8 @@ export class EpicycleRenderer {
       const radius = term.amplitude;
       if (radius < 0.2 / zoom) continue; // Culling des cercles sub-pixels pour fluidité maximale
 
-      // Couleur personnalisée ou palette cybernétique adaptative
-      const circleColor = term.color || (isDark ? 'rgba(148, 163, 184, 0.18)' : 'rgba(100, 116, 139, 0.22)');
-      const vectorColor = term.color || (isDark ? 'rgba(56, 189, 248, 0.6)' : 'rgba(2, 132, 199, 0.7)');
+      const circleColor = term.color || themeCfg.circleDefault;
+      const vectorColor = term.color || themeCfg.vectorDefault;
 
       // Cercle orbital
       if (this.showCircles) {
@@ -409,13 +490,14 @@ export class EpicycleRenderer {
         const pivotRadius = Math.max(1.2, 2.5 / Math.sqrt(zoom));
         ctx.beginPath();
         ctx.arc(prevCenter.x, prevCenter.y, pivotRadius, 0, 2 * Math.PI);
-        ctx.fillStyle = isDark ? '#38bdf8' : '#0284c7';
+        ctx.fillStyle = themeCfg.pivotColor;
         ctx.fill();
       }
     }
   }
 
   private drawTipGlow(ctx: CanvasRenderingContext2D, tip: Point2D): void {
+    const themeCfg = this.getThemeConfig();
     const zoom = this.camera.zoom;
     const r = Math.max(2.5, 4.5 / Math.sqrt(zoom));
 
@@ -423,15 +505,15 @@ export class EpicycleRenderer {
     ctx.save();
     ctx.beginPath();
     ctx.arc(tip.x, tip.y, r * 2.8, 0, 2 * Math.PI);
-    ctx.fillStyle = 'rgba(56, 189, 248, 0.25)';
+    ctx.fillStyle = themeCfg.tipGlowColor;
     ctx.fill();
 
     // Pointe interne éclatante
     ctx.beginPath();
     ctx.arc(tip.x, tip.y, r, 0, 2 * Math.PI);
-    ctx.fillStyle = '#f8fafc';
-    ctx.shadowColor = '#38bdf8';
-    ctx.shadowBlur = 8;
+    ctx.fillStyle = themeCfg.tipColor;
+    ctx.shadowColor = themeCfg.tipGlowColor;
+    ctx.shadowBlur = this.theme === 'paper' ? 3 : 8;
     ctx.fill();
     ctx.restore();
   }
@@ -445,7 +527,8 @@ export class EpicycleRenderer {
     const ms = this.fpsCounter.getFrameTimeMs();
     const active = Math.min(this.terms.length, this.maxCircles);
     const total = this.terms.length;
-    const isDark = this.theme === 'dark';
+    const themeCfg = this.getThemeConfig();
+    const isDark = this.theme !== 'paper';
 
     const text = `${fps} FPS | ${ms} ms | ${active}/${total} cercles | Zoom: ${this.camera.zoom.toFixed(2)}x`;
 
@@ -458,8 +541,8 @@ export class EpicycleRenderer {
     const y = 12;
 
     // Fond pill discret
-    ctx.fillStyle = isDark ? 'rgba(15, 23, 42, 0.75)' : 'rgba(255, 255, 255, 0.85)';
-    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)';
+    ctx.fillStyle = themeCfg.statsBgColor;
+    ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.12)';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.roundRect ? ctx.roundRect(x, y, boxWidth, boxHeight, 6) : ctx.rect(x, y, boxWidth, boxHeight);
