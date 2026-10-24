@@ -10,6 +10,7 @@ import {
   EpicyclesLabProjectState,
 } from '../src/state/serialization';
 import { generatePiPreset, generateHeartPreset } from '../src/math/presets';
+import { computeMetrics } from '../src/math/metrics';
 
 describe('Stage 3 - Mode Dessin Inverse & Web Worker', () => {
   it('calcule la DFT/FFT inverse de manière non-bloquante avec métriques', async () => {
@@ -52,6 +53,54 @@ describe('Stage 3 - Mode Dessin Inverse & Web Worker', () => {
     expect(response.terms.length).toBe(64);
     expect(response.metrics.rmse).toBeDefined();
     expect(response.metrics.relativeRmse).toBeDefined();
+  });
+
+  it('reproduit le symbole π et un tracé à main levée avec erreur RMSE < seuil et énergie capturée > 98%', () => {
+    // 1. Test sur le symbole Pi (N=128 points)
+    const piPoints = generatePiPreset(128);
+    const piRes = processInverseFourier({
+      id: 'pi-quality',
+      points: piPoints,
+      numSamples: 128,
+      closed: true,
+      smoothRadius: 0,
+      gibbsWindow: 'none',
+      sortOrder: 'amplitude-desc',
+    });
+
+    // Vérification de la convergence partielle (M=40 cercles sur 128) et totale (M=128)
+    const metrics40 = computeMetrics(piRes.resampledPoints, piRes.terms, 40);
+    expect(metrics40.energyRatio).toBeGreaterThan(0.98);
+    expect(metrics40.relativeRmse).toBeLessThan(5.0); // < 5% de la diagonale avec seulement 40 cercles
+
+    expect(piRes.metrics.rmse).toBeLessThan(1e-6);
+    expect(piRes.metrics.relativeRmse).toBeLessThan(0.01);
+    expect(piRes.metrics.energyRatio).toBeGreaterThan(0.999);
+
+    // 2. Test sur un tracé à main levée simulé (vitesse irrégulière, 90 points bruts)
+    const freehandPoints = Array.from({ length: 90 }, (_, i) => {
+      const u = (i / 90) * 2 * Math.PI;
+      const angle = u + 0.25 * Math.sin(2 * u);
+      return {
+        x: 150 * Math.cos(angle) + 45 * Math.cos(3 * angle),
+        y: 120 * Math.sin(angle) - 35 * Math.sin(2 * angle),
+      };
+    });
+
+    const freehandRes = processInverseFourier({
+      id: 'freehand-quality',
+      points: freehandPoints,
+      numSamples: 128,
+      closed: true,
+      smoothRadius: 1,
+      gibbsWindow: 'none',
+      sortOrder: 'amplitude-desc',
+    });
+
+    const freehandPartial = computeMetrics(freehandRes.resampledPoints, freehandRes.terms, 32);
+    expect(freehandPartial.energyRatio).toBeGreaterThan(0.99);
+    expect(freehandPartial.relativeRmse).toBeLessThan(3.0);
+    expect(freehandRes.metrics.rmse).toBeLessThan(1e-6);
   });
 });
 
