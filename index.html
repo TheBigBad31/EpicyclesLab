@@ -14,9 +14,20 @@
         <div id="transport-bar-slot"></div>
       </main>
 
-      <!-- Panneau Latéral (Atelier) -->
+      <!-- Panneau Latéral (Atelier & Dessin Inverse) -->
       <aside class="sidebar" id="sidebar-container">
-        <div id="workshop-container"></div>
+        <!-- Onglets de bascule de Mode -->
+        <nav class="mode-tabs">
+          <button id="tab-workshop" class="tab-btn" data-target="workshop-container">
+            🌀 Mode Atelier
+          </button>
+          <button id="tab-inverse" class="tab-btn active" data-target="inverse-container">
+            ✏️ Dessin Inverse (DFT/FFT)
+          </button>
+        </nav>
+
+        <div id="workshop-container" class="tab-pane" style="display: none;"></div>
+        <div id="inverse-container" class="tab-pane"></div>
       </aside>
     </div>
 

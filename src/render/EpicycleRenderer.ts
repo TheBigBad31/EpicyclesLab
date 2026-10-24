@@ -12,6 +12,8 @@ export interface EpicycleRendererOptions {
   showVectors?: boolean;
   showTrail?: boolean;
   showStats?: boolean;
+  showTargetCurve?: boolean;
+  targetCurvePoints?: Point2D[];
   theme?: 'dark' | 'light';
 }
 
@@ -29,6 +31,8 @@ export class EpicycleRenderer {
   public showVectors: boolean = true;
   public showTrail: boolean = true;
   public showStats: boolean = true;
+  public showTargetCurve: boolean = false;
+  public targetCurvePoints: Point2D[] = [];
   public theme: 'dark' | 'light' = 'dark';
 
   // Animation & transport temporel
@@ -72,6 +76,8 @@ export class EpicycleRenderer {
     if (options.showVectors !== undefined) this.showVectors = options.showVectors;
     if (options.showTrail !== undefined) this.showTrail = options.showTrail;
     if (options.showStats !== undefined) this.showStats = options.showStats;
+    if (options.showTargetCurve !== undefined) this.showTargetCurve = options.showTargetCurve;
+    if (options.targetCurvePoints) this.targetCurvePoints = options.targetCurvePoints;
     if (options.theme) this.theme = options.theme;
 
     this.setupDprAndResize();
@@ -276,6 +282,11 @@ export class EpicycleRenderer {
     ctx.scale(this.dpr, this.dpr);
     this.camera.applyTransform(ctx, logicalWidth, logicalHeight);
 
+    // 0. Superposition filigrane de la courbe cible originale (Mode Dessin Inverse)
+    if (this.showTargetCurve && this.targetCurvePoints.length > 1) {
+      this.drawTargetCurve(ctx);
+    }
+
     // 1. Rendu de la traînée lumineuse (Trail)
     if (this.showTrail) {
       this.trail.render(ctx, this.camera.zoom);
@@ -298,6 +309,30 @@ export class EpicycleRenderer {
     if (this.showStats) {
       this.drawStatsOverlay();
     }
+  }
+
+  public setTargetCurve(points: Point2D[], show: boolean = true): void {
+    this.targetCurvePoints = [...points];
+    this.showTargetCurve = show;
+  }
+
+  private drawTargetCurve(ctx: CanvasRenderingContext2D): void {
+    const pts = this.targetCurvePoints;
+    if (pts.length < 2) return;
+
+    ctx.save();
+    ctx.strokeStyle = this.theme === 'dark' ? 'rgba(244, 63, 94, 0.45)' : 'rgba(225, 29, 72, 0.4)';
+    ctx.lineWidth = Math.max(1, 2 / Math.sqrt(this.camera.zoom));
+    ctx.setLineDash([4, 4]);
+
+    ctx.beginPath();
+    ctx.moveTo(pts[0].x, pts[0].y);
+    for (let i = 1; i < pts.length; i++) {
+      ctx.lineTo(pts[i].x, pts[i].y);
+    }
+    ctx.closePath();
+    ctx.stroke();
+    ctx.restore();
   }
 
   private drawBackgroundGrid(logicalWidth: number, logicalHeight: number): void {
